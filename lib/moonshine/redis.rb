@@ -35,7 +35,7 @@ module Moonshine
         :provider => :dpkg,
         :require   => exec('compile redis')
       exec 'install redis',
-        :command => "redis-cli shutdown; sudo make install",
+        :command => "sudo make install",
         :timeout => 0,
         :require => package('redis-server'),
         :cwd     => "/usr/local/src/redis-#{version}",
