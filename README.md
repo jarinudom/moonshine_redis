@@ -56,6 +56,7 @@ For example, in <tt>moonshine.yml</tt>:
 * :requirepass: false
 * :maxclients: 0
 * :maxmemory: 0
+* :maxmemory_policy: allkeys-lru # default behavior is noeviction, only applies if maxmemory is set
 * :appendonly: false
 * :appendfsync: everysec # this is the default for redis and the recommended setting.
 * :vm_enabled: false # warning: virtual memory has been removed in 2.6 and won't be added to the config file if you have version set > 2.4
@@ -72,3 +73,4 @@ We *highly* recommend setting the sysctl setting <code>vm.overcommit_memory</cod
   vm.overcommit_memory: 1</code></pre>
 
 You'll also need to add <code>recipe :sysctl</code> to your manifest.
+
