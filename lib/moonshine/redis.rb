@@ -1,5 +1,31 @@
 module Moonshine
   module Redis
+    
+    # converts 'truey' things to 'yes' and 'falsey' things to 'no' to fit the redis config file conventions.
+    def redis_config_boolean(key, default = true)
+      if key.nil?
+        default ? 'yes' : 'no'
+      else
+        ((!!key) == true) ? 'yes' : 'no'
+      end
+    end
+
+    # Checks version of Redis do determine if it supports virtual memory.
+    def redis_supports_virtual_memory?
+      major, minor, patch = *(configuration[:redis][:version] || '2.4.17').split('.')
+      if (major.to_i <= 2 && minor.to_i <= 4)
+        true
+      else
+        false
+      end
+    end
+
+    # Used in the recipe to decide whether or not to restart redis after config changes.
+    def redis_restart_on_change
+      restart_on_change = configuration[:redis][:restart_on_change]
+      restart_on_change = true if restart_on_change.nil? # nil is true so we have a default value.
+      restart_on_change
+    end
 
     # Define options for this plugin via the <tt>configure</tt> method
     # in your application manifest (or in moonshine.yml):
@@ -9,14 +35,21 @@ module Moonshine
     # Then call the recipe(s) you need:
     #
     #  recipe :redis
+    
     def redis(options={})
       options = HashWithIndifferentAccess.new({ :enable_on_boot => true }.merge(options))
       make_command = options[:arch] || Facter.architecture == 'i386' ? 'make 32bit' : 'make'
-      version = options[:version] || '2.2.11'
+      version = options[:version] || '2.6.16'
+
+      notifies = if redis_restart_on_change
+                   [service('redis-server')]
+                 else
+                   []
+                 end
 
       package 'wget', :ensure => :installed
       exec 'download redis',
-        :command => "wget http://redis.googlecode.com/files/redis-#{version}.tar.gz",
+        :command => "wget http://download.redis.io/releases/redis-#{version}.tar.gz",
         :require => package('wget'),
         :cwd     => '/usr/local/src',
         :creates => "/usr/local/src/redis-#{version}.tar.gz"
@@ -34,12 +67,18 @@ module Moonshine
         :ensure   => :absent,
         :provider => :dpkg,
         :require   => exec('compile redis')
+      exec 'shutdown redis',
+        :command => "redis-cli shutdown",
+        :timeout => 0,
+        :onlyif => "which redis-cli",
+        :refreshonly => true
       exec 'install redis',
         :command => "sudo make install",
         :timeout => 0,
         :require => package('redis-server'),
         :cwd     => "/usr/local/src/redis-#{version}",
-        :unless => "test -f /usr/local/bin/redis-server && /usr/local/bin/redis-server --version | grep 'Redis server version #{version}'"
+        :notify => exec('shutdown redis'),
+        :unless => "test -f /usr/local/bin/redis-server && /usr/local/bin/redis-server --version | grep '#{version} '"
 
       group 'redis', :ensure =>:present
       user 'redis',
@@ -87,7 +126,7 @@ module Moonshine
       file '/etc/redis/redis.conf',
         :ensure  => :present,
         :mode    => '644',
-        :notify  => service('redis-server'),
+        :notify  => notifies,
         :content => template(File.join(File.dirname(__FILE__), '..', '..', 'templates', 'redis.conf.erb'), binding)
 
       # install client gem if specified
@@ -96,5 +135,5 @@ module Moonshine
       end
     end
 
-  end
+  end  
 end

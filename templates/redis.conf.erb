@@ -51,7 +51,9 @@ databases <%= options[:databases] || '16' %>
 #   after 300 sec (5 min) if at least 10 keys changed
 #   after 60 sec if at least 10000 keys changed
 <% if options[:saves] %>
-<%= options[:saves].map { |save| "#{save}\n" } %>
+<% options[:saves].each do |save| %>
+<%= save %>
+<% end %>
 <% else %>
 save 900 1
 save 300 10
@@ -80,7 +82,7 @@ dir /var/lib/redis
 
 # slaveof <masterip> <masterport>
 <% if options[:slaves] %>
-<%= options[:slaves].each { |slave| "#{slave}\n" } %>
+<%= options[:slaves].join("\n") %>
 <% end %>
 
 # If the master is password protected (using the "requirepass" configuration
@@ -102,6 +104,8 @@ dir /var/lib/redis
 
 <%= "requirepass #{options[:requirepass]}" if options[:requirepass] %>
 
+<% unless options[:maxclients].nil? %>
+
 ################################### LIMITS ####################################
 
 # Set the max number of connected clients at the same time. By default there
@@ -111,6 +115,8 @@ dir /var/lib/redis
 # an error 'max number of clients reached'.
 
 maxclients <%= options[:maxclients] || '0' %>
+
+<% end %>
 
 # Don't use more memory than the specified amount of bytes.
 # When the memory limit is reached Redis will try to remove keys with an
@@ -151,7 +157,7 @@ maxclients <%= options[:maxclients] || '0' %>
 # IMPORTANT: Check the BGREWRITEAOF to check how to rewrite the append
 # log file in background when it gets too big.
 
-appendonly <%= options[:appendonly] || 'no' %>
+appendonly <%= redis_config_boolean(options[:appendonly],false) %>
 
 # The fsync() call tells the Operating System to actually write data on disk
 # instead to wait for more data in the output buffer. Some OS will really flush 
@@ -169,9 +175,16 @@ appendonly <%= options[:appendonly] || 'no' %>
 # it want, for better performances (but if you can live with the idea of
 # some data loss consider the default persistence mode that's snapshotting).
 
-appendfsync <%= options[:appendfsync] || 'always' %>
+appendfsync <%= options[:appendfsync] || 'everysec' %>
+# appendfsync always
 # appendfsync everysec
 # appendfsync no
+
+<% 
+# Virtual Memory is deprecated in 2.6, so we need to make sure it's supported before putting the settings in.
+
+if redis_supports_virtual_memory?
+%>
 
 ################################ VIRTUAL MEMORY ###############################
 
@@ -234,3 +247,5 @@ appendfsync <%= options[:appendfsync] || 'always' %>
 # Virtual Memory implementation.
 #vm-max-threads 4
 <%= "vm-max-threads #{options[:vm_max_threads]}" if options[:vm_max_threads] %>
+
+<% end %>
